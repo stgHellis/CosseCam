@@ -2,11 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useCosseCamStore, type Resolution } from "@/store/cossecam-store"
+import { cameraStream } from "@/lib/camera-stream"
 
 const RESOLUTION_MAP: Record<Resolution, { width: number; height: number }> = {
+  "144p": { width: 256, height: 144 },
+  "240p": { width: 426, height: 240 },
+  "360p": { width: 640, height: 360 },
   "480p": { width: 640, height: 480 },
   "720p": { width: 1280, height: 720 },
   "1080p": { width: 1920, height: 1080 },
+  "1440p": { width: 2560, height: 1440 },
   "4k": { width: 3840, height: 2160 },
 }
 
@@ -23,6 +28,7 @@ export function useCamera() {
     resolution,
     frameRate,
     audioEnabled,
+    sharpness,
   } = useCosseCamStore()
 
   const startCamera = useCallback(async () => {
@@ -48,6 +54,9 @@ export function useCamera() {
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       streamRef.current = stream
+
+      // Share the stream globally (Bug #3 fix)
+      cameraStream.set(stream)
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
@@ -76,6 +85,8 @@ export function useCamera() {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
     }
+    // Clear shared stream (Bug #3 fix)
+    cameraStream.set(null)
     if (videoRef.current) {
       videoRef.current.srcObject = null
     }
@@ -93,12 +104,41 @@ export function useCamera() {
     }
   }, [isCameraActive, stopCamera, startCamera])
 
+  // ─── Bug #1 fix: Apply sharpness via track constraints ────
+  useEffect(() => {
+    const stream = streamRef.current
+    if (!stream || !isCameraActive) return
+
+    const videoTrack = stream.getVideoTracks()[0]
+    if (!videoTrack) return
+
+    try {
+      const capabilities = videoTrack.getCapabilities?.() as
+        | { sharpness?: { min: number; max: number; step: number } }
+        | undefined
+
+      if (capabilities?.sharpness) {
+        const normalized = Math.round(
+          capabilities.sharpness.min +
+            (sharpness / 100) *
+              (capabilities.sharpness.max - capabilities.sharpness.min)
+        )
+        videoTrack.applyConstraints({
+          advanced: [{ sharpness: normalized }],
+        } as MediaTrackConstraints)
+      }
+    } catch {
+      // Sharpness not supported on this device/browser — ignore silently
+    }
+  }, [sharpness, isCameraActive])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop())
       }
+      cameraStream.set(null)
     }
   }, [])
 

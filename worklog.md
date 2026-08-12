@@ -145,3 +145,182 @@ Stage Summary:
 - Access points: top-right OBS button in camera view, bottom toolbar OBS button, landing page CTA
 - ESLint clean, zero console errors, all UI verified in browser
 - 3 services running: Next.js (3000), signaling (3004), OBS bridge (3005)
+
+---
+Task ID: 6
+Agent: Main Architect
+Task: Fix camera not showing video when start button is pressed
+
+Work Log:
+- Analyzed uploaded screenshot via VLM: confirmed black screen after pressing start button
+- Identified root cause: `AnimatePresence mode="wait"` in `camera-preview.tsx` was conditionally rendering the `<video>` element
+- When camera starts: loading spinner mounts → video UNMOUNTS → getUserMedia resolves → stream set on OLD video element → spinner unmounts → NEW video mounts WITHOUT stream → black screen
+- Fix: Removed `AnimatePresence` conditional rendering. The `<video>` element is now ALWAYS in the DOM
+- Loading, error, and idle states are now rendered as overlay `<div>`s on top of the persistent video element
+- Extracted overlay states into separate components (`IdleOverlay`, `LoadingOverlay`, `ErrorOverlay`) to avoid inline JSX conditional parsing issue
+- Removed `framer-motion` import from camera-preview (no longer needed)
+- Verified: idle state shows "Appuyez sur le bouton pour demarrer la camera" correctly
+
+Stage Summary:
+- Camera preview fix: video element stays in DOM permanently, overlays are purely visual
+- The `videoRef` now always points to the same DOM element, so `getUserMedia` stream assignment works
+- ESLint clean, zero console errors, idle state verified in browser
+
+---
+Task ID: 7
+Agent: Main Architect
+Task: Add new video element features (screenshot, recording, PiP, fullscreen, grid, camera info)
+
+Work Log:
+- Updated Zustand store with new states: `isRecording`, `recordingStartTime`, `showGrid`, `isPipActive`, `showCameraInfo`, `lastScreenshotUrl`, `screenshotFlash` + setters/togglers
+- Created `src/hooks/use-camera-features.ts` — Comprehensive hook with:
+  - `takeScreenshot()` — Canvas draw with CSS filter support, flash effect, auto-download as PNG/JPEG/WebP
+  - `startRecording()`/`stopRecording()`/`toggleRecording()` — MediaRecorder API with VP9/VP8 fallback, auto-download on stop
+  - `togglePip()` — Picture-in-Picture API with auto-detect PiP close event
+  - `toggleFullscreen()` — Fullscreen API via container ref
+  - `handleVideoTap()` — Tap-to-focus using ImageCapture API (manual→continuous AF)
+  - Auto-stop recording when camera stops
+  - PiP exit event listener cleanup
+- Rewrote `src/components/cossecam/camera-preview.tsx` with new overlays:
+  - `GridOverlay` — Rule of thirds SVG grid (4 lines + center crosshair)
+  - `RecordingIndicator` — Red pill badge with pulsing dot + live timer (MM:SS)
+  - `CameraInfoBadge` — Resolution, zoom level, FPS, camera facing (AV/AR) badges
+  - `ScreenshotFlash` — White flash overlay on capture
+  - Refactored timer into `useRecordingTimer()` custom hook (no cascading renders)
+- Updated `src/components/cossecam/camera-toolbar.tsx`:
+  - New secondary action row (visible when camera active): Grid, Camera Info, PiP, Fullscreen
+  - Screenshot button (Camera icon) in main row
+  - Recording button (Circle/Square icon, red when active)
+  - All new buttons disabled when camera is off
+- Updated `src/components/cossecam/camera-view.tsx`:
+  - Wired `useCameraFeatures` hook with `videoRef` and `streamRef`
+  - Added `fullscreenContainerRef` to root div for fullscreen API
+  - Passed all new callbacks to `CameraToolbar`
+  - Passed `handleVideoTap` to `CameraPreview`
+
+Stage Summary:
+- 6 new video features added: Screenshot, Recording, Picture-in-Picture, Fullscreen, Grid overlay, Camera Info badge
+- All features gated behind camera active state
+- Recording includes live timer, auto-download, and auto-stop on camera off
+- Screenshot includes flash effect, filter-aware canvas capture, auto-download
+- ESLint clean, zero console errors, browser verified
+
+---
+Task ID: 8
+Agent: Main Architect
+Task: Add more resolution formats and recording formats/quality
+
+Work Log:
+- Expanded `Resolution` type from 4 to 8 options: 144p, 240p, 360p, 480p, 720p, 1080p, 1440p, 4k
+- Added resolution dimensions to `use-camera.ts` RESOLUTION_MAP for all new formats
+- Added `RecordingFormat` type: `webm-vp9`, `webm-vp8`, `webm-h264`, `mp4`
+- Added `RecordingQuality` type: `low`, `medium`, `high`, `ultra` with corresponding bitrates (0.5/1.5/2.5/5 Mbps)
+- Added `recordingFormat` and `recordingQuality` states to Zustand store
+- Updated `use-camera-features.ts`:
+  - `FORMAT_MIME_MAP` and `FORMAT_EXT_MAP` for format→mime/extension mapping
+  - `QUALITY_BITRATE_MAP` for quality→bitrate mapping
+  - Extended `ALL_MIME_FALLBACKS` chain with H.264
+  - `startRecording()` now reads format/quality from store, with smart fallback chain
+  - File extension derived from actual selected mime type
+- Rewrote `settings-dialog.tsx`:
+  - 8 resolutions in dropdown with tier badges (SD/HD/FHD/QHD/UHD)
+  - 4 recording formats in dropdown with codec info and descriptions
+   - 4 recording quality buttons with bitrate labels (Faible 0.5Mbps → Ultra 5Mbps)
+  - Added ScrollArea for scrollable settings content
+  - All text in French
+- Enhanced `RecordingIndicator` overlay to show format + quality labels during recording
+- Enhanced `CameraInfoBadge` to show friendly resolution names (e.g. "1080p FHD") and recording bitrate badge
+
+Stage Summary:
+- 8 resolution options (144p→4K) with tier classification
+- 4 recording formats (WebM VP9, WebM VP8, WebM H.264, MP4)
+- 4 quality presets (0.5–5 Mbps)
+- Smart codec fallback chain in recording hook
+- ESLint clean, zero console errors, browser verified — all dropdowns show correct options---
+Task ID: 1
+Agent: main
+Task: Implémenter les 5 bugs critiques identifiés dans l'analyse
+
+Work Log:
+- Bug #1 (exposure/sharpness non appliqués) :
+  - Ajouté `exposure` au destructuring du store dans `camera-preview.tsx`
+  - Combiné `brightness + exposure` dans le CSS filter : `brightness(${brightness + exposure}%)`
+  - Ajouté `sharpness` au destructuring du store dans `use-camera.ts`
+  - Créé un useEffect qui applique `sharpness` via `track.applyConstraints({ advanced: [{ sharpness: normalizedValue }] })` quand le capteur le supporte
+- Bug #2 (enregistrement sans filtres) :
+  - Ajouté un système de miroir canvas dans `use-camera-features.ts` : `startCanvasMirror()` / `stopCanvasMirror()`
+  - Le canvas rend la vidéo avec les mêmes filtres CSS (brightness, contrast, saturation, exposure) et transforms (zoom, rotation, flip) via `ctx.filter` et `ctx.save/restore`
+  - `getFilteredStream()` crée un `canvas.captureStream(fps)` et y ajoute les pistes audio du flux original
+  - `startRecording()` démarre le miroir canvas puis utilise le flux filtré pour le MediaRecorder
+  - `onstop` du MediaRecorder arrête le miroir canvas
+  - Fallback sur le flux brut si le canvas n'est pas disponible
+  - Le screenshot utilise aussi `brightness + exposure` dans les filtres canvas
+- Bug #3 (document.querySelector("video") fragile) :
+  - Créé `src/lib/camera-stream.ts` — module shared avec `get()`/`set()` pour le MediaStream courant
+  - `use-camera.ts` appelle `cameraStream.set(stream)` après `getUserMedia()` et `cameraStream.set(null)` au stop
+  - `use-connection.ts` utilise `cameraStream.get()` au lieu de `document.querySelector("video")?.srcObject`
+- Bug #4 (socket.io.js manquant dans le flux OBS) :
+  - Remplacé `<script src="/socket.io/socket.io.js">` par `<script src="https://cdn.socket.io/4.7.5/socket.io.min.js">` dans `/api/stream/[sessionId]/route.ts`
+- Bug #5 (USB non implémenté mais sélectionnable) :
+  - Désactivé le bouton USB avec `disabled` + `cursor-not-allowed` + `opacity-50`
+  - Remplacé le sous-titre "Câble" par un badge "Bientôt"
+  - Supprimé les états hover
+
+Stage Summary:
+- 0 erreurs lint
+- 0 erreurs compilation (dev log clean)
+- Vérification navigateur OK : landing page, vue caméra, toolbar, dialog paramètres avec badge USB
+- Fichiers modifiés : use-camera.ts, camera-preview.tsx, use-camera-features.ts, use-connection.ts, route.ts, settings-dialog.tsx
+- Fichier créé : src/lib/camera-stream.ts
+
+---
+Task ID: 7
+Agent: Main Architect
+Task: Implémenter USB avec navigator.usb
+
+Work Log:
+- Ajouté l'état USB au store Zustand : `usbSupported`, `usbDeviceName`, `usbTetheringActive`, `usbIpAddress`, `usbDetecting` + setters
+- Créé `mini-services/usb-bridge/` — service HTTP (port 3006) avec :
+  - `GET /api/health` — Health check
+  - `GET /api/status` — Status USB en cache (rapide)
+  - `GET /api/detect` — Sonde les plages IP USB tethering (192.168.42.x, 192.168.43.x) avec concurrence 16 et timeout 800ms
+  - `GET /api/probe?ip=x&port=y` — Sonde une IP spécifique
+  - `WS /ws` — WebSocket pour status temps réel (pas utilisé côté client, polling à la place)
+- Créé `src/hooks/use-usb-connection.ts` — Hook USB complet :
+  - Détection `navigator.usb` (support WebUSB)
+  - `requestUsbDevice()` — Ouvre le sélecteur de périphérique USB avec filtres par VID (Google, Samsung, Xiaomi, Huawei, OnePlus, Motorola, Sony, LG, HTC, Oppo, Nothing)
+  - Écoute événements USB connect/disconnect via `navigator.usb.addEventListener`
+  - `detectTethering()` — Sonde le bridge USB pour détecter le tethering actif
+  - `getCachedStatus()` — Vérification rapide du cache
+  - `connectUsb()` / `disconnectUsb()` — Connexion/déconnexion USB
+  - Polling automatique (10s) quand le mode USB est actif
+- Mis à jour `settings-dialog.tsx` :
+  - Bouton USB activé (plus `disabled`)
+  - Si WebUSB non supporté → badge « Non supporté » (ambre)
+  - Si appareil détecté → nom de l'appareil (vert)
+  - Si tethering actif → badge « Tethering actif » avec icône Cable
+   - Indicateur spinner pendant la détection
+  - Clic sur USB lance `requestUsbDevice()` si aucun appareil n'est encore appairé
+- Mis à jour `connection-panel.tsx` — Panneau de connexion USB :
+  - Titre « Connexion USB » avec badge USB bleu
+  - Carte détection appareil USB avec bouton « Rescanner »
+  - Carte statut tethering USB avec IP détectée
+  - Guide 4 étapes pour la connexion USB
+  - Stats USB (IP, latence ultra-faible)
+  - Bouton bleu « Détecter et se connecter »
+  - Session ID + QR code masqués en mode USB
+- Mis à jour `camera-view.tsx` :
+  - Bouton connexion top-left affiche icône USB et label « USB » en mode USB (couleur bleue)
+  - Badge « USB » dans la barre de centre en mode USB
+  - Icône connexion USB (bleue) au lieu de Wi-Fi (vert) quand connecté en USB
+
+Stage Summary:
+- Implémentation USB complète avec `navigator.usb` (WebUSB API)
+- Détection de 11 fabricants Android par Vendor ID
+- Bridge USB (port 3006) avec sonde de tethering sur plages 192.168.42.x et 192.168.43.x
+- Hook `useUsbConnection` avec détection, sélection, tethering, polling auto
+- UI complète : settings dialog, connection panel, barre d'état
+- 0 erreurs lint, 0 erreurs compilation, navigateur vérifié
+- 4 services actifs : Next.js (3000), signaling (3004), OBS bridge (3005), USB bridge (3006)
+- Fichiers créés : mini-services/usb-bridge/*, src/hooks/use-usb-connection.ts
+- Fichiers modifiés : cossecam-store.ts, settings-dialog.tsx, connection-panel.tsx, camera-view.tsx

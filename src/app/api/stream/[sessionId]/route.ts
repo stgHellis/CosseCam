@@ -1,13 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server"
 
-//export const runtime = "edge"
+// export const runtime = "edge"
 
 // Stream endpoint for OBS Studio Browser Source
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> },
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
-  const { sessionId } = await params;
+  const { sessionId } = await params
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -33,7 +33,7 @@ export async function GET(
 <body>
   <div id="status">Connexion…</div>
   <video id="remoteVideo" autoplay playsinline></video>
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
     const sessionId = "${sessionId}";
     const statusEl = document.getElementById("status");
@@ -111,12 +111,12 @@ export async function GET(
     });
   </script>
 </body>
-</html>`;
+</html>`
 
   return new NextResponse(html, {
     headers: {
       "Content-Type": "text/html",
       "Cache-Control": "no-cache, no-store",
     },
-  });
+  })
 }

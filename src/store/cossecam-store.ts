@@ -21,7 +21,9 @@ export interface OverlayConfig {
 
 export type AppView = "landing" | "camera"
 export type ConnectionType = "wifi" | "usb"
-export type Resolution = "480p" | "720p" | "1080p" | "4k"
+export type Resolution = "144p" | "240p" | "360p" | "480p" | "720p" | "1080p" | "1440p" | "4k"
+export type RecordingFormat = "webm-vp9" | "webm-vp8" | "webm-h264" | "mp4"
+export type RecordingQuality = "low" | "medium" | "high" | "ultra"
 
 interface CosseCamState {
   // App view
@@ -74,6 +76,18 @@ interface CosseCamState {
   latency: number
   setLatency: (ms: number) => void
 
+  // USB
+  usbSupported: boolean
+  setUsbSupported: (v: boolean) => void
+  usbDeviceName: string | null
+  setUsbDeviceName: (v: string | null) => void
+  usbTetheringActive: boolean
+  setUsbTetheringActive: (v: boolean) => void
+  usbIpAddress: string | null
+  setUsbIpAddress: (v: string | null) => void
+  usbDetecting: boolean
+  setUsbDetecting: (v: boolean) => void
+
   // Overlays
   overlays: OverlayConfig[]
   addOverlay: (overlay: OverlayConfig) => void
@@ -100,6 +114,28 @@ interface CosseCamState {
   setObsConnected: (connected: boolean) => void
   obsSourceCreated: boolean
   setObsSourceCreated: (created: boolean) => void
+
+  // Recording settings
+  recordingFormat: RecordingFormat
+  setRecordingFormat: (f: RecordingFormat) => void
+  recordingQuality: RecordingQuality
+  setRecordingQuality: (q: RecordingQuality) => void
+
+  // Video features
+  isRecording: boolean
+  setIsRecording: (recording: boolean) => void
+  recordingStartTime: number | null
+  setRecordingStartTime: (time: number | null) => void
+  showGrid: boolean
+  toggleShowGrid: () => void
+  isPipActive: boolean
+  setIsPipActive: (active: boolean) => void
+  showCameraInfo: boolean
+  toggleShowCameraInfo: () => void
+  lastScreenshotUrl: string | null
+  setLastScreenshotUrl: (url: string | null) => void
+  screenshotFlash: boolean
+  setScreenshotFlash: (flash: boolean) => void
 
   // Reset
   resetControls: () => void
@@ -161,6 +197,18 @@ export const useCosseCamStore = create<CosseCamState>((set) => ({
   latency: 0,
   setLatency: (latency) => set({ latency }),
 
+  // USB
+  usbSupported: false,
+  setUsbSupported: (usbSupported) => set({ usbSupported }),
+  usbDeviceName: null,
+  setUsbDeviceName: (usbDeviceName) => set({ usbDeviceName }),
+  usbTetheringActive: false,
+  setUsbTetheringActive: (usbTetheringActive) => set({ usbTetheringActive }),
+  usbIpAddress: null,
+  setUsbIpAddress: (usbIpAddress) => set({ usbIpAddress }),
+  usbDetecting: false,
+  setUsbDetecting: (usbDetecting) => set({ usbDetecting }),
+
   // Overlays
   overlays: [],
   addOverlay: (overlay) =>
@@ -201,6 +249,28 @@ export const useCosseCamStore = create<CosseCamState>((set) => ({
   setObsConnected: (obsConnected) => set({ obsConnected }),
   obsSourceCreated: false,
   setObsSourceCreated: (obsSourceCreated) => set({ obsSourceCreated }),
+
+  // Recording settings
+  recordingFormat: "webm-vp9" as RecordingFormat,
+  setRecordingFormat: (recordingFormat) => set({ recordingFormat }),
+  recordingQuality: "high" as RecordingQuality,
+  setRecordingQuality: (recordingQuality) => set({ recordingQuality }),
+
+  // Video features
+  isRecording: false,
+  setIsRecording: (isRecording) => set({ isRecording }),
+  recordingStartTime: null,
+  setRecordingStartTime: (recordingStartTime) => set({ recordingStartTime }),
+  showGrid: false,
+  toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+  isPipActive: false,
+  setIsPipActive: (isPipActive) => set({ isPipActive }),
+  showCameraInfo: true,
+  toggleShowCameraInfo: () => set((s) => ({ showCameraInfo: !s.showCameraInfo })),
+  lastScreenshotUrl: null,
+  setLastScreenshotUrl: (lastScreenshotUrl) => set({ lastScreenshotUrl }),
+  screenshotFlash: false,
+  setScreenshotFlash: (screenshotFlash) => set({ screenshotFlash }),
 
   // Reset
   resetControls: () =>

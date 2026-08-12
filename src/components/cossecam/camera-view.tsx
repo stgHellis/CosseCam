@@ -1,9 +1,10 @@
 "use client"
 
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowLeft, Wifi, WifiOff, Users, Radio, MonitorPlay } from "lucide-react"
+import { ArrowLeft, Wifi, WifiOff, Users, Radio, MonitorPlay, Usb } from "lucide-react"
 import { useCosseCamStore } from "@/store/cossecam-store"
 import { useCamera } from "@/hooks/use-camera"
+import { useCameraFeatures } from "@/hooks/use-camera-features"
 import { CameraPreview } from "./camera-preview"
 import { CameraToolbar } from "./camera-toolbar"
 import { ControlsPanel } from "./controls-panel"
@@ -20,16 +21,31 @@ export function CameraView() {
     latency,
     resolution,
     isCameraActive,
+    connectionType,
     setConnectionPanelOpen,
     setObsPanelOpen,
     obsConnected,
   } = useCosseCamStore()
 
-  const { videoRef, isLoading, error, startCamera, stopCamera, switchCamera } =
+  const isUsbMode = connectionType === "usb"
+
+  const { videoRef, streamRef, isLoading, error, startCamera, stopCamera, switchCamera } =
     useCamera()
 
+  const {
+    fullscreenContainerRef,
+    takeScreenshot,
+    toggleRecording,
+    togglePip,
+    toggleFullscreen,
+    handleVideoTap,
+  } = useCameraFeatures(videoRef, streamRef)
+
   return (
-    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-black">
+    <div
+      ref={fullscreenContainerRef}
+      className="flex h-[100dvh] w-full flex-col overflow-hidden bg-black"
+    >
       {/* Top status bar */}
       <motion.div
         initial={{ y: -20, opacity: 0 }}
@@ -54,12 +70,14 @@ export function CameraView() {
             onClick={() => setConnectionPanelOpen(true)}
             className={`ml-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
               connectionState === "connected"
-                ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                ? isUsbMode
+                  ? "bg-blue-500/15 text-blue-400 hover:bg-blue-500/25"
+                  : "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
                 : "bg-white/[0.06] text-gray-400 hover:bg-white/[0.12] hover:text-white"
             }`}
           >
-            <Radio className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Connexion</span>
+            {isUsbMode ? <Usb className="h-3.5 w-3.5" /> : <Radio className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{isUsbMode ? "USB" : "Connexion"}</span>
           </button>
         </div>
 
@@ -70,14 +88,25 @@ export function CameraView() {
             {resolution.toUpperCase()}
           </span>
 
+          {/* Connection type badge */}
+          {isUsbMode && (
+            <span className="rounded-md bg-blue-500/10 px-2 py-0.5 text-xs text-blue-400">
+              USB
+            </span>
+          )}
+
           {/* Connection status */}
           <div className="flex items-center gap-1.5">
             {connectionState === "connected" ? (
-              <Wifi className="h-3.5 w-3.5 text-emerald-400" />
+              isUsbMode ? (
+                <Usb className="h-3.5 w-3.5 text-blue-400" />
+              ) : (
+                <Wifi className="h-3.5 w-3.5 text-emerald-400" />
+              )
             ) : (
               <WifiOff className="h-3.5 w-3.5 text-gray-600" />
             )}
-            {connectionState === "connected" && (
+            {connectionState === "connected" && !isUsbMode && (
               <span className="flex items-center gap-1 text-xs text-emerald-400">
                 <Users className="h-3 w-3" />
                 {peerCount}
@@ -121,6 +150,7 @@ export function CameraView() {
               videoRef={videoRef}
               isLoading={isLoading}
               error={error}
+              onVideoTap={handleVideoTap}
             />
           </motion.div>
         </AnimatePresence>
@@ -132,6 +162,10 @@ export function CameraView() {
           onStartCamera={startCamera}
           onStopCamera={stopCamera}
           onSwitchCamera={switchCamera}
+          onTakeScreenshot={takeScreenshot}
+          onToggleRecording={toggleRecording}
+          onTogglePip={togglePip}
+          onToggleFullscreen={toggleFullscreen}
         />
       </div>
 

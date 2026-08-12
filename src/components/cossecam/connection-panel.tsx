@@ -12,6 +12,10 @@ import {
   Radio,
   Loader2,
   QrCode,
+  Usb,
+  RefreshCw,
+  Smartphone,
+  Cable,
 } from "lucide-react"
 import {
   Sheet,
@@ -25,6 +29,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useCosseCamStore } from "@/store/cossecam-store"
 import { useConnection } from "@/hooks/use-connection"
+import { useUsbConnection } from "@/hooks/use-usb-connection"
 import { QrCodeDialog } from "./qr-code-dialog"
 
 export function ConnectionPanel() {
@@ -35,19 +40,52 @@ export function ConnectionPanel() {
     sessionId,
     peerCount,
     latency,
+    connectionType,
+    usbSupported,
+    usbDeviceName,
+    usbTetheringActive,
+    usbIpAddress,
+    usbDetecting,
   } = useCosseCamStore()
 
   const { connect, disconnect, measureLatency } = useConnection()
+  const {
+    requestUsbDevice,
+    detectTethering,
+    connectUsb,
+    disconnectUsb,
+  } = useUsbConnection()
+
   const [copied, setCopied] = useState(false)
   const [qrDialogOpen, setQrDialogOpen] = useState(false)
 
-  const handleConnect = useCallback(() => {
-    connect()
-  }, [connect])
+  const isUsbMode = connectionType === "usb"
+
+  const handleConnect = useCallback(async () => {
+    if (isUsbMode) {
+      // USB connection flow
+      if (usbSupported && !usbDeviceName) {
+        await requestUsbDevice()
+      }
+      await detectTethering()
+      await connectUsb()
+    } else {
+      connect()
+    }
+  }, [isUsbMode, usbSupported, usbDeviceName, requestUsbDevice, detectTethering, connectUsb, connect])
 
   const handleDisconnect = useCallback(() => {
-    disconnect()
-  }, [disconnect])
+    if (isUsbMode) {
+      disconnectUsb()
+    } else {
+      disconnect()
+    }
+  }, [isUsbMode, disconnectUsb, disconnect])
+
+  const handleRescanUsb = useCallback(async () => {
+    await requestUsbDevice()
+    await detectTethering()
+  }, [requestUsbDevice, detectTethering])
 
   const handleCopy = async () => {
     try {
@@ -68,11 +106,11 @@ export function ConnectionPanel() {
 
   // Auto-measure latency when connected
   useEffect(() => {
-    if (connectionState === "connected") {
+    if (connectionState === "connected" && !isUsbMode) {
       const timer = setTimeout(() => measureLatency(), 1000)
       return () => clearTimeout(timer)
     }
-  }, [connectionState, measureLatency])
+  }, [connectionState, measureLatency, isUsbMode])
 
   const stateConfig = {
     disconnected: {
@@ -90,11 +128,11 @@ export function ConnectionPanel() {
       icon: Loader2,
     },
     connected: {
-      label: "Connecté",
+      label: isUsbMode ? "Connecté (USB)" : "Connecté",
       color: "text-emerald-400",
       bgColor: "bg-emerald-500/10",
       borderColor: "border-emerald-500/20",
-      icon: Wifi,
+      icon: isUsbMode ? Usb : Wifi,
     },
   }
 
@@ -111,13 +149,134 @@ export function ConnectionPanel() {
           <SheetTitle className="flex items-center gap-2 text-white">
             <Radio className="h-4 w-4 text-emerald-400" />
             Connexion
+            {isUsbMode && (
+              <Badge variant="outline" className="ml-2 gap-1 border-blue-500/30 bg-blue-500/10 text-blue-400">
+                <Usb className="h-3 w-3" />
+                USB
+              </Badge>
+            )}
           </SheetTitle>
           <SheetDescription className="text-gray-500">
-            Gérez la connexion entre votre téléphone et l'ordinateur.
+            {isUsbMode
+              ? "Connectez votre téléphone via câble USB."
+              : "Gérez la connexion entre votre téléphone et l'ordinateur."}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex flex-col gap-5 pt-4 pb-4">
+          {/* USB-specific section */}
+          {isUsbMode && (
+            <>
+              {/* USB device detection card */}
+              <div className="space-y-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Usb className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm font-medium text-gray-300">
+                      Appareil USB
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleRescanUsb}
+                    disabled={usbDetecting}
+                    className="gap-1.5 text-gray-400 hover:bg-white/5 hover:text-white"
+                  >
+                    {usbDetecting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    <span className="text-xs">Rescanner</span>
+                  </Button>
+                </div>
+
+                {!usbSupported ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                    <WifiOff className="h-4 w-4 shrink-0 text-amber-400" />
+                    <p className="text-xs text-amber-400">
+                      WebUSB n'est pas disponible dans ce navigateur. Utilisez Chrome ou Edge.
+                    </p>
+                  </div>
+                ) : usbDeviceName ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                    <Smartphone className="h-4 w-4 shrink-0 text-emerald-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-emerald-300">
+                        {usbDeviceName}
+                      </p>
+                      <p className="text-[10px] text-emerald-400/60">Appareil détecté via WebUSB</p>
+                    </div>
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    Aucun appareil USB détecté. Connectez votre téléphone et activez le partage de connexion USB.
+                  </p>
+                )}
+              </div>
+
+              {/* USB Tethering status */}
+              <div className="space-y-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <div className="flex items-center gap-2">
+                  <Cable className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-300">
+                    Partage USB (tethering)
+                  </span>
+                  {usbTetheringActive && (
+                    <Badge variant="outline" className="ml-auto border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-400">
+                      Actif
+                    </Badge>
+                  )}
+                </div>
+
+                {usbDetecting && (
+                  <div className="flex items-center gap-2 px-1">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                    <p className="text-xs text-amber-400">
+                      Recherche en cours — vérification des plages IP USB (192.168.42.x, 192.168.43.x)…
+                    </p>
+                  </div>
+                )}
+
+                {usbTetheringActive && usbIpAddress ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                    <Cable className="h-4 w-4 shrink-0 text-emerald-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-emerald-300">
+                        Tethering détecté
+                      </p>
+                      <p className="font-mono text-[10px] text-emerald-400/60">
+                        {usbIpAddress}
+                      </p>
+                    </div>
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  </div>
+                ) : !usbDetecting && (
+                  <p className="text-xs text-gray-500">
+                    Activez le partage de connexion USB sur votre téléphone, puis cliquez sur «&nbsp;Rescanner&nbsp;».
+                  </p>
+                )}
+
+                {/* USB instructions */}
+                <div className="rounded-lg border border-white/[0.04] bg-white/[0.01] p-3">
+                  <p className="mb-2 text-xs font-medium text-gray-400">
+                    Comment connecter en USB :
+                  </p>
+                  <ol className="list-inside list-decimal space-y-1 text-[11px] text-gray-500">
+                    <li>Connectez le câble USB au téléphone et à l'ordinateur</li>
+                    <li>Sur le téléphone, activez «&nbsp;Partage de connexion USB&nbsp;» dans les paramètres réseau</li>
+                    <li>Cliquez sur «&nbsp;Rescanner&nbsp;» pour détecter le téléphone</li>
+                    <li>Cliquez sur «&nbsp;Se connecter&nbsp;» pour lancer le flux vidéo</li>
+                  </ol>
+                </div>
+              </div>
+
+              <Separator className="bg-white/[0.06]" />
+            </>
+          )}
+
           {/* Status card */}
           <div
             className={`flex items-center gap-3 rounded-xl border p-4 ${state.bgColor} ${state.borderColor}`}
@@ -133,72 +292,98 @@ export function ConnectionPanel() {
               }</p>
               <p className="text-xs text-gray-500">
                 {connectionState === "connected"
-                  ? `${peerCount} appareil${peerCount > 1 ? "s" : ""} connecté${peerCount > 1 ? "s" : ""}`
-                  : "Aucun appareil connecté"}
+                  ? isUsbMode
+                    ? `USB${usbIpAddress ? ` — ${usbIpAddress}` : ""}`
+                    : `${peerCount} appareil${peerCount > 1 ? "s" : ""} connecté${peerCount > 1 ? "s" : ""}`
+                  : isUsbMode
+                    ? "En attente de connexion USB"
+                    : "Aucun appareil connecté"}
               </p>
             </div>
           </div>
 
-          {/* Session ID */}
-          <div className="space-y-2">
-            <p className="text-sm text-gray-400">
-              Identifiant de session
-            </p>
-            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/50 p-3">
-              <code className="min-w-0 flex-1 truncate font-mono text-sm text-emerald-300">
-                {sessionId}
-              </code>
+          {/* Session ID — hidden in USB mode */}
+          {!isUsbMode && (
+            <>
+              <div className="space-y-2">
+                <p className="text-sm text-gray-400">
+                  Identifiant de session
+                </p>
+                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/50 p-3">
+                  <code className="min-w-0 flex-1 truncate font-mono text-sm text-emerald-300">
+                    {sessionId}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleCopy}
+                    className="shrink-0 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                  >
+                    {copied ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-600">
+                  Partagez cet identifiant avec l'ordinateur récepteur.
+                </p>
+              </div>
+
+              {/* QR Code Button */}
               <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleCopy}
-                className="shrink-0 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                onClick={() => setQrDialogOpen(true)}
+                variant="outline"
+                className="w-full gap-2 border-emerald-500/20 bg-emerald-500/5 text-emerald-300 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-200"
               >
-                {copied ? (
-                  <CheckCircle2 className="h-4 w-4" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
+                <QrCode className="h-4 w-4" />
+                Afficher le QR Code de connexion
               </Button>
-            </div>
-            <p className="text-xs text-gray-600">
-              Partagez cet identifiant avec l'ordinateur récepteur.
-            </p>
-          </div>
 
-          {/* QR Code Button */}
-          <Button
-            onClick={() => setQrDialogOpen(true)}
-            variant="outline"
-            className="w-full gap-2 border-emerald-500/20 bg-emerald-500/5 text-emerald-300 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-200"
-          >
-            <QrCode className="h-4 w-4" />
-            Afficher le QR Code de connexion
-          </Button>
-
-          <Separator className="bg-white/[0.06]" />
+              <Separator className="bg-white/[0.06]" />
+            </>
+          )}
 
           {/* Stats row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-              <div className="flex items-center gap-2 text-gray-500">
-                <Users className="h-3.5 w-3.5" />
-                <span className="text-xs">Appareils</span>
+          {!isUsbMode && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Users className="h-3.5 w-3.5" />
+                  <span className="text-xs">Appareils</span>
+                </div>
+                <p className="mt-1 font-mono text-lg font-semibold text-white">
+                  {peerCount}
+                </p>
               </div>
-              <p className="mt-1 font-mono text-lg font-semibold text-white">
-                {peerCount}
-              </p>
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Activity className="h-3.5 w-3.5" />
+                  <span className="text-xs">Latence</span>
+                </div>
+                <p className="mt-1 font-mono text-lg font-semibold text-white">
+                  {latency > 0 ? `${latency}ms` : "—"}
+                </p>
+              </div>
             </div>
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-              <div className="flex items-center gap-2 text-gray-500">
+          )}
+
+          {/* USB latency indicator */}
+          {isUsbMode && usbTetheringActive && (
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+              <div className="flex items-center gap-2 text-blue-400">
                 <Activity className="h-3.5 w-3.5" />
-                <span className="text-xs">Latence</span>
+                <span className="text-xs">Connexion USB</span>
               </div>
-              <p className="mt-1 font-mono text-lg font-semibold text-white">
-                {latency > 0 ? `${latency}ms` : "—"}
+              <p className="mt-1 font-mono text-sm font-semibold text-white">
+                {usbIpAddress || "—"}
+              </p>
+              <p className="mt-0.5 text-[10px] text-blue-400/60">
+                Latence ultra-faible via câble USB
               </p>
             </div>
-          </div>
+          )}
 
           {/* Connect / Disconnect button */}
           <AnimatePresence mode="wait">
@@ -211,10 +396,19 @@ export function ConnectionPanel() {
               >
                 <Button
                   onClick={handleConnect}
-                  className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
+                  disabled={isUsbMode && usbDetecting}
+                  className={`w-full ${
+                    isUsbMode
+                      ? "bg-blue-500 text-white hover:bg-blue-600"
+                      : "bg-emerald-500 text-white hover:bg-emerald-600"
+                  } disabled:opacity-50`}
                 >
-                  <Wifi className="mr-2 h-4 w-4" />
-                  Se connecter
+                  {isUsbMode ? (
+                    <Usb className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Wifi className="mr-2 h-4 w-4" />
+                  )}
+                  {isUsbMode ? "Détecter et se connecter" : "Se connecter"}
                 </Button>
               </motion.div>
             ) : (

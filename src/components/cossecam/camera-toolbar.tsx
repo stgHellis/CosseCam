@@ -3,7 +3,6 @@
 import { motion } from "framer-motion"
 import {
   CameraOff,
-  RotateCcw,
   RefreshCw,
   SlidersHorizontal,
   Settings,
@@ -11,8 +10,14 @@ import {
   WifiOff,
   Type,
   MonitorPlay,
+  Camera,
+  Circle,
+  Square,
+  Grid3X3,
+  PictureInPicture2,
+  Maximize,
+  Info,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { useCosseCamStore } from "@/store/cossecam-store"
 
 interface CameraToolbarProps {
@@ -21,6 +26,10 @@ interface CameraToolbarProps {
   onStartCamera: () => void
   onStopCamera: () => void
   onSwitchCamera: () => void
+  onTakeScreenshot?: () => void
+  onToggleRecording?: () => void
+  onTogglePip?: () => void
+  onToggleFullscreen?: () => void
 }
 
 export function CameraToolbar({
@@ -29,6 +38,10 @@ export function CameraToolbar({
   onStartCamera,
   onStopCamera,
   onSwitchCamera,
+  onTakeScreenshot,
+  onToggleRecording,
+  onTogglePip,
+  onToggleFullscreen,
 }: CameraToolbarProps) {
   const {
     connectionState,
@@ -43,6 +56,11 @@ export function CameraToolbar({
     obsPanelOpen,
     setObsPanelOpen,
     obsConnected,
+    isRecording,
+    showGrid,
+    toggleShowGrid,
+    showCameraInfo,
+    toggleShowCameraInfo,
   } = useCosseCamStore()
 
   const isConnected = connectionState === "connected"
@@ -56,6 +74,44 @@ export function CameraToolbar({
     >
       {/* Gradient backdrop */}
       <div className="bg-gradient-to-t from-black/90 via-black/70 to-transparent px-4 pb-6 pt-16 sm:px-6">
+        {/* Top row: secondary actions */}
+        {isCameraActive && (
+          <div className="mx-auto mb-4 flex max-w-lg items-center justify-center gap-2">
+            <ToolbarButton
+              active={showGrid}
+              onClick={toggleShowGrid}
+              tooltip="Grille de composition"
+            >
+              <Grid3X3 className="h-4 w-4" />
+            </ToolbarButton>
+
+            <ToolbarButton
+              active={showCameraInfo}
+              onClick={toggleShowCameraInfo}
+              tooltip="Infos caméra"
+            >
+              <Info className="h-4 w-4" />
+            </ToolbarButton>
+
+            <ToolbarButton
+              onClick={onTogglePip}
+              tooltip="Image dans l'image"
+              disabled={!isCameraActive}
+            >
+              <PictureInPicture2 className="h-4 w-4" />
+            </ToolbarButton>
+
+            <ToolbarButton
+              onClick={onToggleFullscreen}
+              tooltip="Plein écran"
+              disabled={!isCameraActive}
+            >
+              <Maximize className="h-4 w-4" />
+            </ToolbarButton>
+          </div>
+        )}
+
+        {/* Main toolbar row */}
         <div className="mx-auto flex max-w-lg items-center justify-center gap-3">
           {/* Connection toggle */}
           <ToolbarButton
@@ -68,6 +124,15 @@ export function CameraToolbar({
             ) : (
               <WifiOff className="h-5 w-5 text-gray-400" />
             )}
+          </ToolbarButton>
+
+          {/* Screenshot */}
+          <ToolbarButton
+            onClick={onTakeScreenshot}
+            disabled={!isCameraActive}
+            tooltip="Capture d'écran"
+          >
+            <Camera className="h-5 w-5" />
           </ToolbarButton>
 
           {/* Camera switch */}
@@ -96,6 +161,20 @@ export function CameraToolbar({
               <div className="h-6 w-6 rounded-full bg-current" />
             )}
           </motion.button>
+
+          {/* Recording */}
+          <ToolbarButton
+            active={isRecording}
+            onClick={onToggleRecording}
+            disabled={!isCameraActive}
+            tooltip={isRecording ? "Arrêter l'enregistrement" : "Enregistrer"}
+          >
+            {isRecording ? (
+              <Square className="h-4 w-4 fill-red-500 text-red-500" />
+            ) : (
+              <Circle className="h-5 w-5" />
+            )}
+          </ToolbarButton>
 
           {/* OBS auto-connect */}
           <ToolbarButton

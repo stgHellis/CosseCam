@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react"
 import { io, Socket } from "socket.io-client"
 import { useCosseCamStore } from "@/store/cossecam-store"
+import { cameraStream } from "@/lib/camera-stream"
 
 function setupPeerConnection(
   socket: Socket,
@@ -24,9 +25,8 @@ function setupPeerConnection(
   const pc = new RTCPeerConnection(config)
   pcRef.current = pc
 
-  // Get camera stream from the video element in the DOM
-  const videoEl = document.querySelector("video")
-  const stream = videoEl?.srcObject as MediaStream | null
+  // Bug #3 fix: use shared stream reference instead of DOM query
+  const stream = cameraStream.get()
   if (stream) {
     stream.getTracks().forEach((track) => {
       pc.addTrack(track, stream)
