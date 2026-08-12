@@ -1,0 +1,27 @@
+{
+  "name": "CosseCam",
+  "short_name": "CosseCam",
+  "description": "Transformez votre smartphone en webcam HD professionnel",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#10b981",
+  "orientation": "any",
+  "categories": ["utilities", "photo & video"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

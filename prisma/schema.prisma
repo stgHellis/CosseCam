@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  //url      = env("DATABASE_URL")
+}
+
+model CameraSession {
+  id            String   @id @default(cuid())
+  name          String
+  deviceId      String
+  resolution    String   @default("1080p")
+  frameRate     Int      @default(30)
+  isActive      Boolean  @default(false)
+  audioEnabled  Boolean  @default(true)
+  connectionType String  @default("wifi")
+  startedAt     DateTime @default(now())
+  endedAt       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  connections  Connection[]
+  overlays    Overlay[]
+  settings    SessionSetting[]
+}
+
+model Connection {
+  id              String   @id @default(cuid())
+  sessionId       String
+  peerId          String
+  peerType        String   @default("viewer")
+  ipAddress       String?
+  connectionState String   @default("new")
+  connectedAt     DateTime @default(now())
+  disconnectedAt  DateTime?
+  latency         Int?
+
+  session CameraSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Overlay {
+  id          String   @id @default(cuid())
+  sessionId   String
+  type        String   @default("text")
+  content     String
+  positionX   Float    @default(50)
+  positionY   Float    @default(50)
+  width       Float    @default(200)
+  height      Float    @default(50)
+  fontSize    Int      @default(24)
+  fontColor   String   @default("#ffffff")
+  bgColor     String   @default("#000000")
+  bgOpacity   Float    @default(0.5)
+  zIndex      Int      @default(10)
+  isVisible   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  session CameraSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SessionSetting {
+  id             String   @id @default(cuid())
+  sessionId      String   @unique
+  brightness     Float    @default(100)
+  contrast       Float    @default(100)
+  saturation     Float    @default(100)
+  zoom           Float    @default(1)
+  rotation       Int      @default(0)
+  flipHorizontal Boolean  @default(false)
+  flipVertical   Boolean  @default(false)
+  exposure       Float    @default(0)
+  sharpness      Float    @default(0)
+  whiteBalance   String   @default("auto")
+  focusMode      String   @default("continuous")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  session CameraSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
